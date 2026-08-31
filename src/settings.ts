@@ -76,7 +76,7 @@ export class InkSettingTab extends PluginSettingTab {
           },
           {
             name: "Eraser size",
-            desc: "The eraser removes only the area of a stroke that it touches.",
+            desc: "The eraser removes the whole stroke when it touches it.",
             control: { type: "slider", key: "eraserWidth", min: 8, max: 56, step: 2 }
           },
           {
@@ -235,7 +235,7 @@ export class InkSettingTab extends PluginSettingTab {
 
     new Setting(this.containerEl)
       .setName("Eraser size")
-      .setDesc("The eraser removes only the area of a stroke that it touches.")
+      .setDesc("The eraser removes the whole stroke when it touches it.")
       .addSlider((slider) => slider
         .setLimits(8, 56, 2)
         .setValue(settings.eraserWidth)

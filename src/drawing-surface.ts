@@ -7,6 +7,7 @@ import {
   createStroke,
   eraseStrokeAt,
   pointInBounds,
+  repairInkPointOrder,
   removeSharpBacktracks,
   selectStrokesInPolygon,
   simplifyPoints,
@@ -172,8 +173,8 @@ export class DrawingSurface {
     });
     const emptyIcon = this.emptyState.createSpan({ cls: "ink-empty-icon" });
     setIcon(emptyIcon, "pen-tool");
-    this.emptyState.createEl("strong", { text: "Draw with Apple Pencil" });
-    this.emptyState.createSpan({ text: "One finger pans · two fingers zoom" });
+    this.emptyState.createEl("strong", { text: "Draw with Pen" });
+    this.emptyState.createSpan({ text: "Primary button erases - Secondary button pans" });
 
     const status = this.root.createDiv({ cls: "ink-canvas-status" });
     this.statusLabel = status.createSpan({ cls: "ink-canvas-status-tool" });
@@ -211,6 +212,7 @@ export class DrawingSurface {
     this.resizeObserver.observe(this.viewport);
 
     this.refreshSettings();
+    this.updateBackgroundTransform();
     this.updateToolbar();
     this.scheduleRender();
   }
@@ -555,12 +557,12 @@ export class DrawingSurface {
       for (const sample of coalescedEvents(event)) {
         this.appendDraftPoint(this.eventToInkPoint(sample));
       }
-      this.draft.points = simplifyPoints(
-        removeSharpBacktracks(this.draft.points, this.draft.width),
-        this.draft.tool === "pen"
-          ? Math.max(0.45, Math.min(1.5, this.draft.width * 0.42))
-          : Math.max(0.35 / this.scale, 0.45)
-      );
+      this.draft.points = this.draft.tool === "pen"
+        ? repairInkPointOrder(this.draft.points)
+        : simplifyPoints(
+          removeSharpBacktracks(this.draft.points, this.draft.width),
+          Math.max(0.35 / this.scale, 0.45)
+        );
       if (this.draft.points.length > 0) {
         this.drawing.strokes.push(this.draft);
         this.gestureChanged = true;
@@ -839,8 +841,15 @@ export class DrawingSurface {
   private markCameraChanged(): void {
     this.shouldFit = false;
     this.dryLayerDirty = true;
+    this.updateBackgroundTransform();
     this.updateToolbar();
     this.scheduleRender();
+  }
+
+  private updateBackgroundTransform(): void {
+    const dotSize = 24 * this.scale;
+    this.root.style.backgroundPosition = `${this.offsetX}px ${this.offsetY}px`;
+    this.root.style.backgroundSize = `${dotSize}px ${dotSize}px, auto`;
   }
 
   private scheduleRender(): void {
@@ -906,9 +915,23 @@ export class DrawingSurface {
 
   private shouldNavigate(event: PointerEvent): boolean {
     if (isEraserButton(event)) return false;
-    if (event.pointerType === "touch") return !this.settings.allowFingerDrawing;
-    return this.tool === "pan" || this.spacePressed || (event.pointerType === "mouse" && event.button === 1);
+
+    if (event.pointerType === "pen" && isPenPanButton(event)) {
+      return true;
+    }
+
+    if (event.pointerType === "touch") {
+      return !this.settings.allowFingerDrawing;
+    }
+
+    return (
+      this.tool === "pan" ||
+      this.spacePressed ||
+      (event.pointerType === "mouse" && event.button === 1)
+    );
   }
+
+  
 
   private shouldRejectPalm(event: PointerEvent): boolean {
     if (event.pointerType !== "touch" || !this.settings.palmRejection) return false;
@@ -935,6 +958,16 @@ export class DrawingSurface {
 
 function isEraserButton(event: PointerEvent): boolean {
   return event.pointerType === "pen" && (event.button === 5 || (event.buttons & 32) !== 0);
+}
+
+function isPenPanButton(event: PointerEvent): boolean {
+  return (
+    event.pointerType === "pen" &&
+    (
+      event.button === 2 ||
+      (event.buttons & 2) !== 0
+    )
+  );
 }
 
 function consumeEvent(event: Event): void {

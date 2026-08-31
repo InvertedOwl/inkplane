@@ -245,7 +245,7 @@ function createStrokeOutline(stroke: InkStroke): number[][] {
     size: stroke.width,
     thinning: stroke.tool === "pen" ? 0.52 : 0,
     smoothing: stroke.tool === "pen" ? 0.7 : 0.72,
-    streamline: stroke.tool === "pen" ? 0.42 : 0.5,
+    streamline: stroke.tool === "pen" ? 0 : 0.5,
     simulatePressure: false,
     start: { cap: true, taper: 0 },
     end: { cap: true, taper: 0 }
@@ -253,11 +253,9 @@ function createStrokeOutline(stroke: InkStroke): number[][] {
 }
 
 function renderableStrokePoints(stroke: InkStroke): InkPoint[] {
-  const repaired = removeSharpBacktracks(repairInkPointOrder(stroke.points), stroke.width);
-  const tolerance = stroke.tool === "pen"
-    ? Math.max(0.45, Math.min(1.5, stroke.width * 0.42))
-    : 0.45;
-  return simplifyPoints(repaired, tolerance);
+  const ordered = repairInkPointOrder(stroke.points);
+  if (stroke.tool === "pen") return ordered;
+  return simplifyPoints(removeSharpBacktracks(ordered, stroke.width), 0.45);
 }
 
 function traceCenterline(context: CanvasRenderingContext2D, points: InkPoint[]): void {

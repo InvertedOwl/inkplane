@@ -67,23 +67,16 @@ describe("stroke editing geometry", () => {
     expect(hitTestStroke(horizontalStroke, { x: 50, y: 30 }, 4)).toBe(false);
   });
 
-  it("splits a stroke around the part touched by the eraser", () => {
+  it("removes a stroke when the eraser touches it anywhere", () => {
     const fragments = eraseStrokeAt(horizontalStroke, { x: 50, y: 10 }, 4);
 
-    expect(fragments).toHaveLength(2);
-    expect(fragments[0].points[fragments[0].points.length - 1].x).toBeCloseTo(44);
-    expect(fragments[1].points[0].x).toBeCloseTo(56);
-    expect(fragments.every((fragment) => fragment.color === horizontalStroke.color)).toBe(true);
-    expect(fragments.every((fragment) => fragment.width === horizontalStroke.width)).toBe(true);
+    expect(fragments).toEqual([]);
   });
 
-  it("trims only the touched end of a stroke", () => {
+  it("removes a stroke even when only the end is touched", () => {
     const fragments = eraseStrokeAt(horizontalStroke, { x: 10, y: 10 }, 4);
 
-    expect(fragments).toHaveLength(1);
-    expect(fragments[0]).not.toBe(horizontalStroke);
-    expect(fragments[0].points[0].x).toBeCloseTo(16);
-    expect(fragments[0].points[fragments[0].points.length - 1].x).toBeCloseTo(100);
+    expect(fragments).toEqual([]);
   });
 
   it("keeps an untouched stroke unchanged", () => {

@@ -4,7 +4,7 @@
   "version": "0.2.9",
   "minAppVersion": "1.7.2",
   "description": "An infinite handwriting canvas with note embeds, designed for Apple Pencil and other pens.",
-  "author": "Sirwan Afifi",
+  "author": "Sirwan Afifi + InvertedOwl",
   "authorUrl": "https://github.com/SirwanAfifi",
   "isDesktopOnly": false
 }

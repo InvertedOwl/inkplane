@@ -67,7 +67,7 @@ const TOOL_DESIGNS: Record<"pen" | "highlighter" | "eraser", ToolDesign> = {
   },
   eraser: {
     label: "Eraser",
-    description: "Erases only where you touch",
+    description: "Erases the whole stroke on contact",
     icon: "eraser",
     widths: [{ label: "Small", value: 12 }, { label: "Medium", value: 20 }, { label: "Large", value: 36 }],
     minimum: 8,
