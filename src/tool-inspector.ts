@@ -371,13 +371,13 @@ export class ToolInspector {
 }
 
 export function toolColor(tool: InkTool, settings: InkSettings): string {
-  if (tool === "pen" || tool === "line") return settings.penColor;
+  if (tool === "pen" || tool === "line" || tool === "box") return settings.penColor;
   if (tool === "highlighter") return settings.highlighterColor;
   return "adaptive";
 }
 
 export function toolWidth(tool: InkTool, settings: InkSettings): number {
-  if (tool === "pen" || tool === "line") return settings.penWidth;
+  if (tool === "pen" || tool === "line" || tool === "box") return settings.penWidth;
   if (tool === "highlighter") return settings.highlighterWidth;
   if (tool === "eraser") return settings.eraserWidth;
   return 0;

@@ -61,4 +61,21 @@ describe(".inklayer file format", () => {
 
     expect(parsed.strokes[0].points.map((point) => point.x)).toEqual([10, 30, 40]);
   });
+
+  it("round-trips box strokes as a distinct tool", () => {
+    const parsed = parseDrawingFile(JSON.stringify({
+      strokes: [{
+        id: "box-1",
+        tool: "box",
+        color: "#2563eb",
+        width: 3,
+        opacity: 1,
+        points: [[10, 20, 0.5, 0, 0, 1], [80, 60, 0.5, 0, 0, 2]]
+      }]
+    }));
+
+    expect(parsed.strokes[0]).toMatchObject({ id: "box-1", tool: "box", color: "#2563eb" });
+    const serialized = JSON.parse(serializeDrawingFile(parsed)) as { strokes: Array<{ tool: string }> };
+    expect(serialized.strokes[0].tool).toBe("box");
+  });
 });

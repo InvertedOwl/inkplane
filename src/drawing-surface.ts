@@ -146,6 +146,7 @@ export class DrawingSurface {
     this.startToolbarGroup("Drawing tools", "ink-toolbar-instruments");
     this.addToolButton("pen", "pen-tool", "Pen");
     this.addToolButton("line", "minus", "Line");
+    this.addToolButton("box", "square", "Box");
     this.addToolButton("highlighter", "highlighter", "Highlighter");
     this.addToolButton("eraser", "eraser", "Eraser");
     this.addToolButton("lasso", "lasso", "Lasso select");
@@ -465,16 +466,22 @@ export class DrawingSurface {
 
     const point = this.toDrawingPoint(event);
     const gestureTool = isEraserButton(event) ? "eraser" : this.tool;
-    if (gestureTool === "pen" || gestureTool === "line" || gestureTool === "highlighter") {
+    if (gestureTool === "pen" || gestureTool === "line" || gestureTool === "box" || gestureTool === "highlighter") {
       this.gestureMode = "draw";
       this.activeRawPressure = null;
       this.selectedIds.clear();
-      const strokeTool = gestureTool === "highlighter" ? "highlighter" : "pen";
+      const strokeTool = gestureTool === "highlighter"
+        ? "highlighter"
+        : gestureTool === "box"
+          ? "box"
+          : "pen";
       this.draft = createStroke(
         strokeTool,
         gestureTool === "highlighter" ? this.settings.highlighterColor : this.settings.penColor,
-        gestureTool === "pen" || gestureTool === "line" ? this.settings.penWidth : this.settings.highlighterWidth,
-        gestureTool === "pen" || gestureTool === "line" ? 1 : 0.34,
+        gestureTool === "pen" || gestureTool === "line" || gestureTool === "box"
+          ? this.settings.penWidth
+          : this.settings.highlighterWidth,
+        gestureTool === "pen" || gestureTool === "line" || gestureTool === "box" ? 1 : 0.34,
         [this.eventToInkPoint(event)]
       );
     } else if (gestureTool === "eraser") {
@@ -519,7 +526,7 @@ export class DrawingSurface {
     consumeEvent(event);
     const events = coalescedEvents(event);
     if (this.gestureMode === "draw" && this.draft) {
-      if (this.tool === "line") {
+      if (this.tool === "line" || this.tool === "box") {
         const sample = events[events.length - 1];
         if (sample) this.updateLineDraft(this.eventToInkPoint(sample));
       } else {
@@ -561,13 +568,13 @@ export class DrawingSurface {
 
     if (this.gestureMode === "draw" && this.draft) {
       const samples = coalescedEvents(event);
-      if (this.tool === "line") {
+      if (this.tool === "line" || this.tool === "box") {
         const sample = samples[samples.length - 1];
         if (sample) this.updateLineDraft(this.eventToInkPoint(sample));
       } else {
         for (const sample of samples) this.appendDraftPoint(this.eventToInkPoint(sample));
       }
-      this.draft.points = this.draft.tool === "pen"
+      this.draft.points = this.draft.tool === "pen" || this.draft.tool === "box"
         ? repairInkPointOrder(this.draft.points)
         : simplifyPoints(
           removeSharpBacktracks(this.draft.points, this.draft.width),
@@ -831,6 +838,7 @@ export class DrawingSurface {
     const labels: Record<InkTool, string> = {
       pen: "Pen",
       line: "Line",
+      box: "Box",
       highlighter: "Highlighter",
       eraser: "Eraser",
       lasso: "Lasso select",

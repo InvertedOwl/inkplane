@@ -70,7 +70,13 @@ function parseStrokes(value: unknown): InkStroke[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((rawStroke, index) => {
     if (!isRecord(rawStroke) || !Array.isArray(rawStroke.points)) return [];
-    const tool = rawStroke.tool === "highlighter" ? "highlighter" : rawStroke.tool === "pen" ? "pen" : null;
+    const tool = rawStroke.tool === "highlighter"
+      ? "highlighter"
+      : rawStroke.tool === "box"
+        ? "box"
+        : rawStroke.tool === "pen"
+          ? "pen"
+          : null;
     if (!tool) return [];
     const points = repairInkPointOrder(rawStroke.points.flatMap((rawPoint) => {
       const point = parsePoint(rawPoint);

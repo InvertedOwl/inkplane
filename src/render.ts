@@ -213,6 +213,18 @@ export class InkRenderer {
       context.beginPath();
       context.arc(points[0].x, points[0].y, width / 2, 0, Math.PI * 2);
       context.fill();
+    } else if (stroke.tool === "box") {
+      const first = points[0];
+      const last = points[points.length - 1];
+      context.lineWidth = stroke.width;
+      context.beginPath();
+      context.rect(
+        Math.min(first.x, last.x),
+        Math.min(first.y, last.y),
+        Math.abs(last.x - first.x),
+        Math.abs(last.y - first.y)
+      );
+      context.stroke();
     } else if (stroke.tool === "highlighter") {
       context.lineWidth = stroke.width;
       traceCenterline(context, points);
@@ -318,6 +330,16 @@ export function exportStrokesToSvg(strokes: InkStroke[], themeElement: HTMLEleme
   const height = Math.max(1, Math.ceil(bounds.maxY - bounds.minY + padding * 2));
   const paths = strokes.flatMap((stroke) => {
     if (stroke.points.length === 0) return [];
+    if (stroke.tool === "box" && stroke.points.length >= 2) {
+      const first = stroke.points[0];
+      const last = stroke.points[stroke.points.length - 1];
+      const color = escapeXml(resolveInkColor(stroke.color, themeElement));
+      const x = Math.min(first.x, last.x).toFixed(2);
+      const y = Math.min(first.y, last.y).toFixed(2);
+      const boxWidth = Math.abs(last.x - first.x).toFixed(2);
+      const boxHeight = Math.abs(last.y - first.y).toFixed(2);
+      return [`  <rect x="${x}" y="${y}" width="${boxWidth}" height="${boxHeight}" fill="none" stroke="${color}" stroke-width="${stroke.width.toFixed(2)}" stroke-opacity="${stroke.opacity.toFixed(3)}"/>`];
+    }
     const outline = createStrokeOutline(stroke);
     if (outline.length === 0) return [];
     const color = escapeXml(resolveInkColor(stroke.color, themeElement));

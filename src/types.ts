@@ -1,5 +1,5 @@
-export type InkTool = "pen" | "line" | "highlighter" | "eraser" | "lasso" | "pan";
-export type StrokeTool = "pen" | "highlighter";
+export type InkTool = "pen" | "line" | "box" | "highlighter" | "eraser" | "lasso" | "pan";
+export type StrokeTool = "pen" | "box" | "highlighter";
 
 export interface InkPoint {
   x: number;
