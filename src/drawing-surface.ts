@@ -363,11 +363,10 @@ export class DrawingSurface {
     button.setAttribute("aria-pressed", "false");
     button.addEventListener("click", (event) => {
       consumeEvent(event);
-      const targetTool = this.tool === "highlighter" ? "highlighter" : "pen";
-      const choice = this.quickColors(targetTool)[index];
+      const colorTool = this.tool === "highlighter" ? "highlighter" : "pen";
+      const choice = this.quickColors(colorTool)[index];
       if (!choice) return;
-      if (this.tool !== targetTool) this.setTool(targetTool);
-      this.applyToolSetting(targetTool === "pen"
+      this.applyToolSetting(colorTool === "pen"
         ? { penColor: choice.value }
         : { highlighterColor: choice.value });
       this.updateToolbar();
@@ -693,7 +692,10 @@ export class DrawingSurface {
   private endNavigation(pointerId: number): void {
     this.navigationPointers.delete(pointerId);
     this.releasePointer(pointerId);
-    if (this.navigationPointers.size === 0) this.root.classList.remove("is-panning");
+    if (this.navigationPointers.size === 0) {
+      this.root.classList.remove("is-panning");
+      this.scheduleRender();
+    }
   }
 
   private finishGesture(): void {
@@ -857,7 +859,6 @@ export class DrawingSurface {
 
   private markCameraChanged(): void {
     this.shouldFit = false;
-    this.dryLayerDirty = true;
     this.updateBackgroundTransform();
     this.updateToolbar();
     this.scheduleRender();
@@ -887,7 +888,8 @@ export class DrawingSurface {
       selectedIds: this.selectedIds,
       lassoPoints: this.lassoPoints,
       eraserPoint: this.eraserPoint,
-      eraserRadius: this.settings.eraserWidth / 2
+      eraserRadius: this.settings.eraserWidth / 2,
+      isNavigating: this.navigationPointers.size > 0
     };
     this.renderer.render(this.drawing.strokes, this.draft, state, this.dryLayerDirty);
     this.dryLayerDirty = false;

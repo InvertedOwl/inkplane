@@ -200,7 +200,8 @@ class InkEmbedPreview {
       selectedIds: new Set(),
       lassoPoints: [],
       eraserPoint: null,
-      eraserRadius: 0
+      eraserRadius: 0,
+      isNavigating: false
     };
     this.renderer.render(this.drawing.strokes, null, state, true);
   }

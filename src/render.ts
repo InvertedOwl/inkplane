@@ -3,7 +3,8 @@ import {
   combinedBounds,
   removeSharpBacktracks,
   repairInkPointOrder,
-  simplifyPoints
+  simplifyPoints,
+  strokeBounds
 } from "./model";
 import { stabilizedStrokePressures } from "./pressure";
 import type { Bounds, InkPoint, InkStroke, Point2D } from "./types";
@@ -16,7 +17,16 @@ export interface InkRenderState {
   lassoPoints: Point2D[];
   eraserPoint: Point2D | null;
   eraserRadius: number;
+  isNavigating: boolean;
 }
+
+interface PreparedStroke {
+  points: InkPoint[];
+  pressures: number[];
+}
+
+const CACHE_PADDING = 0.75;
+const LOW_DETAIL_TOLERANCE = 1.5;
 
 export class InkRenderer {
   private readonly dryContext: CanvasRenderingContext2D;
@@ -24,6 +34,15 @@ export class InkRenderer {
   private cssWidth = 0;
   private cssHeight = 0;
   private pixelRatio = 1;
+  private readonly dryCache: HTMLCanvasElement;
+  private readonly dryCacheContext: CanvasRenderingContext2D;
+  private dryCacheScale = 0;
+  private dryCacheWorldLeft = 0;
+  private dryCacheWorldTop = 0;
+  private dryCacheCssWidth = 0;
+  private dryCacheCssHeight = 0;
+  private dryCacheLowDetail = false;
+  private readonly preparedStrokes = new Map<string, PreparedStroke>();
 
   constructor(
     private readonly dryCanvas: HTMLCanvasElement,
@@ -35,6 +54,15 @@ export class InkRenderer {
     if (!dryContext || !wetContext) throw new Error("Inkplane requires Canvas 2D support.");
     this.dryContext = dryContext;
     this.wetContext = wetContext;
+    this.dryCache = document.createElement("canvas");
+    const dryCacheContext = this.dryCache.getContext("2d");
+    if (!dryCacheContext) throw new Error("Inkplane requires Canvas 2D support.");
+    this.dryCacheContext = dryCacheContext;
+  }
+
+  invalidate(): void {
+    this.preparedStrokes.clear();
+    this.dryCacheScale = 0;
   }
 
   resize(width: number, height: number): boolean {
@@ -56,6 +84,7 @@ export class InkRenderer {
     this.dryCanvas.height = Math.ceil(nextHeight * nextRatio);
     this.wetCanvas.width = Math.ceil(nextWidth * nextRatio);
     this.wetCanvas.height = Math.ceil(nextHeight * nextRatio);
+    this.invalidate();
     return true;
   }
 
@@ -65,20 +94,84 @@ export class InkRenderer {
     state: InkRenderState,
     redrawDryLayer: boolean
   ): void {
-    if (redrawDryLayer) {
-      this.prepareContext(this.dryContext, state);
-      for (const stroke of strokes) this.drawStroke(this.dryContext, stroke);
-      this.dryContext.restore();
+    if (redrawDryLayer || !this.canReuseDryCache(state)) {
+      this.rebuildDryCache(strokes, state);
     }
+    this.drawCachedDryLayer(state);
 
     this.prepareContext(this.wetContext, state);
-    if (draft) this.drawStroke(this.wetContext, draft);
+    if (draft) this.drawStroke(this.wetContext, draft, false, false);
     this.drawSelection(this.wetContext, strokes, state.selectedIds);
     this.drawLasso(this.wetContext, state.lassoPoints);
     if (state.eraserPoint) {
       this.drawEraser(this.wetContext, state.eraserPoint, state.eraserRadius);
     }
     this.wetContext.restore();
+  }
+
+  private canReuseDryCache(state: InkRenderState): boolean {
+    if (this.dryCacheScale !== state.scale) return false;
+    if (this.dryCacheLowDetail !== state.isNavigating) return false;
+    const visibleLeft = -state.offsetX / state.scale;
+    const visibleTop = -state.offsetY / state.scale;
+    const visibleRight = (this.cssWidth - state.offsetX) / state.scale;
+    const visibleBottom = (this.cssHeight - state.offsetY) / state.scale;
+    return visibleLeft >= this.dryCacheWorldLeft &&
+      visibleTop >= this.dryCacheWorldTop &&
+      visibleRight <= this.dryCacheWorldLeft + this.dryCacheCssWidth / state.scale &&
+      visibleBottom <= this.dryCacheWorldTop + this.dryCacheCssHeight / state.scale;
+  }
+
+  private rebuildDryCache(strokes: InkStroke[], state: InkRenderState): void {
+    const paddingX = this.cssWidth * CACHE_PADDING;
+    const paddingY = this.cssHeight * CACHE_PADDING;
+    this.dryCacheCssWidth = this.cssWidth + paddingX * 2;
+    this.dryCacheCssHeight = this.cssHeight + paddingY * 2;
+    this.dryCache.width = Math.ceil(this.dryCacheCssWidth * this.pixelRatio);
+    this.dryCache.height = Math.ceil(this.dryCacheCssHeight * this.pixelRatio);
+    this.dryCacheWorldLeft = (-paddingX - state.offsetX) / state.scale;
+    this.dryCacheWorldTop = (-paddingY - state.offsetY) / state.scale;
+    this.dryCacheScale = state.scale;
+    this.dryCacheLowDetail = state.isNavigating;
+    this.preparedStrokes.clear();
+
+    const context = this.dryCacheContext;
+    context.setTransform(this.pixelRatio, 0, 0, this.pixelRatio, 0, 0);
+    context.clearRect(0, 0, this.dryCacheCssWidth, this.dryCacheCssHeight);
+    context.save();
+    context.translate(-this.dryCacheWorldLeft * state.scale, -this.dryCacheWorldTop * state.scale);
+    context.scale(state.scale, state.scale);
+    const cacheBounds = {
+      minX: this.dryCacheWorldLeft,
+      minY: this.dryCacheWorldTop,
+      maxX: this.dryCacheWorldLeft + this.dryCacheCssWidth / state.scale,
+      maxY: this.dryCacheWorldTop + this.dryCacheCssHeight / state.scale
+    };
+    for (const stroke of strokes) {
+      const bounds = strokeBounds(stroke);
+      if (bounds && intersects(bounds, cacheBounds)) {
+        this.drawStroke(context, stroke, state.isNavigating);
+      }
+    }
+    context.restore();
+  }
+
+  private drawCachedDryLayer(state: InkRenderState): void {
+    this.dryContext.setTransform(this.pixelRatio, 0, 0, this.pixelRatio, 0, 0);
+    this.dryContext.clearRect(0, 0, this.cssWidth, this.cssHeight);
+    const sourceX = (-state.offsetX / state.scale - this.dryCacheWorldLeft) * state.scale * this.pixelRatio;
+    const sourceY = (-state.offsetY / state.scale - this.dryCacheWorldTop) * state.scale * this.pixelRatio;
+    this.dryContext.drawImage(
+      this.dryCache,
+      sourceX,
+      sourceY,
+      this.cssWidth * this.pixelRatio,
+      this.cssHeight * this.pixelRatio,
+      0,
+      0,
+      this.cssWidth,
+      this.cssHeight
+    );
   }
 
   private prepareContext(
@@ -92,10 +185,19 @@ export class InkRenderer {
     context.scale(state.scale, state.scale);
   }
 
-  private drawStroke(context: CanvasRenderingContext2D, stroke: InkStroke): void {
+  private drawStroke(
+    context: CanvasRenderingContext2D,
+    stroke: InkStroke,
+    lowDetail = false,
+    useCache = true
+  ): void {
     if (stroke.points.length === 0) return;
     const color = resolveInkColor(stroke.color, this.themeElement);
-    const points = renderableStrokePoints(stroke);
+    const points = useCache
+      ? this.prepareStroke(stroke, lowDetail).points
+      : lowDetail
+        ? simplifyPoints(renderableStrokePoints(stroke), LOW_DETAIL_TOLERANCE / Math.max(0.1, this.dryCacheScale))
+        : renderableStrokePoints(stroke);
     const pressures = stabilizedStrokePressures(points);
 
     context.save();
@@ -122,6 +224,18 @@ export class InkRenderer {
       context.stroke();
     }
     context.restore();
+  }
+
+  private prepareStroke(stroke: InkStroke, lowDetail: boolean): PreparedStroke {
+    const key = `${stroke.id}:${lowDetail ? "low" : "full"}`;
+    const cached = this.preparedStrokes.get(key);
+    if (cached) return cached;
+    const points = lowDetail
+      ? simplifyPoints(renderableStrokePoints(stroke), LOW_DETAIL_TOLERANCE / Math.max(0.1, this.dryCacheScale))
+      : renderableStrokePoints(stroke);
+    const prepared = { points, pressures: stabilizedStrokePressures(points) };
+    this.preparedStrokes.set(key, prepared);
+    return prepared;
   }
 
   private drawSelection(
@@ -256,6 +370,13 @@ function renderableStrokePoints(stroke: InkStroke): InkPoint[] {
   const ordered = repairInkPointOrder(stroke.points);
   if (stroke.tool === "pen") return ordered;
   return simplifyPoints(removeSharpBacktracks(ordered, stroke.width), 0.45);
+}
+
+function intersects(first: Bounds, second: Bounds): boolean {
+  return first.minX <= second.maxX &&
+    first.maxX >= second.minX &&
+    first.minY <= second.maxY &&
+    first.maxY >= second.minY;
 }
 
 function traceCenterline(context: CanvasRenderingContext2D, points: InkPoint[]): void {
