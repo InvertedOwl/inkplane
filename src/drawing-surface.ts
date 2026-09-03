@@ -166,7 +166,7 @@ export class DrawingSurface {
 
     this.startToolbarGroup("Canvas view", "ink-toolbar-view");
     this.addActionButton("minus", "Zoom out", () => this.zoomBy(0.8));
-    this.zoomButton = this.addTextButton("100%", "Fit drawing", () => this.fitToView());
+    this.zoomButton = this.addTextButton("100%", "Reset zoom to 100%", () => this.resetZoom());
     this.addActionButton("plus", "Zoom in", () => this.zoomBy(1.25));
 
     this.emptyState = this.viewport.createDiv({
@@ -854,6 +854,11 @@ export class DrawingSurface {
   private zoomBy(factor: number): void {
     const rect = this.viewport.getBoundingClientRect();
     this.setZoom(this.scale * factor, { x: rect.width / 2, y: rect.height / 2 });
+  }
+
+  private resetZoom(): void {
+    const rect = this.viewport.getBoundingClientRect();
+    this.setZoom(1, { x: rect.width / 2, y: rect.height / 2 });
   }
 
   private setZoom(nextScale: number, anchor: Point2D): void {
