@@ -145,6 +145,7 @@ export class DrawingSurface {
 
     this.startToolbarGroup("Drawing tools", "ink-toolbar-instruments");
     this.addToolButton("pen", "pen-tool", "Pen");
+    this.addToolButton("line", "minus", "Line");
     this.addToolButton("highlighter", "highlighter", "Highlighter");
     this.addToolButton("eraser", "eraser", "Eraser");
     this.addToolButton("lasso", "lasso", "Lasso select");
@@ -465,15 +466,16 @@ export class DrawingSurface {
 
     const point = this.toDrawingPoint(event);
     const gestureTool = isEraserButton(event) ? "eraser" : this.tool;
-    if (gestureTool === "pen" || gestureTool === "highlighter") {
+    if (gestureTool === "pen" || gestureTool === "line" || gestureTool === "highlighter") {
       this.gestureMode = "draw";
       this.activeRawPressure = null;
       this.selectedIds.clear();
+      const strokeTool = gestureTool === "highlighter" ? "highlighter" : "pen";
       this.draft = createStroke(
-        gestureTool,
-        gestureTool === "pen" ? this.settings.penColor : this.settings.highlighterColor,
-        gestureTool === "pen" ? this.settings.penWidth : this.settings.highlighterWidth,
-        gestureTool === "pen" ? 1 : 0.34,
+        strokeTool,
+        gestureTool === "highlighter" ? this.settings.highlighterColor : this.settings.penColor,
+        gestureTool === "pen" || gestureTool === "line" ? this.settings.penWidth : this.settings.highlighterWidth,
+        gestureTool === "pen" || gestureTool === "line" ? 1 : 0.34,
         [this.eventToInkPoint(event)]
       );
     } else if (gestureTool === "eraser") {
@@ -518,7 +520,12 @@ export class DrawingSurface {
     consumeEvent(event);
     const events = coalescedEvents(event);
     if (this.gestureMode === "draw" && this.draft) {
-      for (const sample of events) this.appendDraftPoint(this.eventToInkPoint(sample));
+      if (this.tool === "line") {
+        const sample = events[events.length - 1];
+        if (sample) this.updateLineDraft(this.eventToInkPoint(sample));
+      } else {
+        for (const sample of events) this.appendDraftPoint(this.eventToInkPoint(sample));
+      }
     } else if (this.gestureMode === "erase") {
       for (const sample of events) {
         const point = this.toDrawingPoint(sample);
@@ -554,8 +561,12 @@ export class DrawingSurface {
     consumeEvent(event);
 
     if (this.gestureMode === "draw" && this.draft) {
-      for (const sample of coalescedEvents(event)) {
-        this.appendDraftPoint(this.eventToInkPoint(sample));
+      const samples = coalescedEvents(event);
+      if (this.tool === "line") {
+        const sample = samples[samples.length - 1];
+        if (sample) this.updateLineDraft(this.eventToInkPoint(sample));
+      } else {
+        for (const sample of samples) this.appendDraftPoint(this.eventToInkPoint(sample));
       }
       this.draft.points = this.draft.tool === "pen"
         ? repairInkPointOrder(this.draft.points)
@@ -729,6 +740,11 @@ export class DrawingSurface {
     this.draft.points.push(point);
   }
 
+  private updateLineDraft(point: InkPoint): void {
+    if (!this.draft) return;
+    this.draft.points = [this.draft.points[0], point];
+  }
+
   private appendLassoPoint(point: Point2D): void {
     const previous = this.lassoPoints[this.lassoPoints.length - 1];
     if (previous && squaredDistance(previous, point) < 4 / (this.scale * this.scale)) return;
@@ -774,7 +790,7 @@ export class DrawingSurface {
       const selected = tool === this.tool;
       button.classList.toggle("is-selected", selected);
       button.setAttribute("aria-pressed", selected ? "true" : "false");
-      const instrumentColor = tool === "pen"
+      const instrumentColor = tool === "pen" || tool === "line"
         ? this.settings.penColor
         : tool === "highlighter"
           ? this.settings.highlighterColor
@@ -812,6 +828,7 @@ export class DrawingSurface {
     const width = toolWidth(this.tool, this.settings);
     const labels: Record<InkTool, string> = {
       pen: "Pen",
+      line: "Line",
       highlighter: "Highlighter",
       eraser: "Eraser",
       lasso: "Lasso select",
